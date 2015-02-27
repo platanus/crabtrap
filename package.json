@@ -1,0 +1,21 @@
+{
+  "name": "crabtrap",
+  "version": "0.0.1",
+  "description": "Recording and replaying HTTP proxy",
+  "author": "Ignacio <iobaixas@gmail.com>",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "proxy",
+    "record",
+    "replay"
+  ],
+  "engines": {
+    "node": ">= 0.10.0"
+  },
+  "bin": {
+    "crabtrap": "bin/crabtrap.bin.js"
+  },
+  "license": "MIT"
+}
