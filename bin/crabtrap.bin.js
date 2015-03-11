@@ -235,6 +235,14 @@ function prepareForwardRequest(_req) {
 	return options;
 }
 
+function buildErrorHandler(_resp) {
+	return function(_err) {
+		console.log('Problem with request: ' + _err.message);
+		_resp.statusCode = 404;
+		_resp.end();
+	};
+}
+
 function passRequest(_req, _resp) {
 	log(LOG.INFO, 'Passing through ' + _req.method + ' request for ' + _req.url);
 
@@ -249,6 +257,8 @@ function passRequest(_req, _resp) {
 		_resp.writeHead(_fw_resp.statusCode, _fw_resp.headers);
 		_fw_resp.pipe(_resp);
 	});
+
+	forward.on('error', buildErrorHandler(_resp));
 
 	_req.pipe(forward);
 }
@@ -274,6 +284,8 @@ function captureRequest(_req, _resp, _useSSL) {
 			serveLastResource(_resp);
 		});
 	});
+
+	forward.on('error', buildErrorHandler(_resp));
 
 	_req.pipe(forward); // forward request data
 }
