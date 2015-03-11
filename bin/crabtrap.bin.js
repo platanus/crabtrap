@@ -25,7 +25,8 @@ var STACK = [],
 	MODE = false,
 	SOURCE = null,
 	PORT = 4000,
-	LOG_LEVEL = LOG.WARN;
+	LOG_LEVEL = LOG.WARN,
+	TEXT_REG = /^(text\/*|application\/(ecmascript|json|javascript|xml|x-javascript|x-markdown))$/i;
 
 (function() {
 	if(process.argv.length < 2) throw 'Must provide a proxy mode';
@@ -196,15 +197,13 @@ function cacheResponse(_req, _resp, _cb) {
 	}
 
 	// use utf8 encoding for uncompresed text:
-	if(!contentEncoding && contentType) {
-		contentType = contentType.match(/([^\/]+)\/([^\s]+)(?:\s+(.+))?/i);
-		if(contentType && (contentType[1] == 'text' || contentType[1] == 'application')) {
-			resource.encoding = 'utf-8';
-		}
+	if(!contentEncoding && contentType && TEXT_REG.test(contentType)) {
+		resource.encoding = 'utf-8';
 	}
 
 	// remove unwanted headers:
 	delete resource.headers['content-length'];
+	delete resource.headers['transfer-encoding'];
 
 	// start receiving data:
 	if(resource.encoding) outStream.setEncoding(resource.encoding);
