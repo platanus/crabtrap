@@ -344,7 +344,7 @@ if(MODE == 'replay') {
 }
 
 var EXITING = false;
-process.on('SIGINT', function() {
+function finishGracefully() {
 	if(EXITING) return;
 	EXITING = true;
 
@@ -355,4 +355,7 @@ process.on('SIGINT', function() {
 	} else {
 		process.exit();
 	}
-});
+}
+
+process.on('SIGTERM', finishGracefully);
+process.on('SIGINT', finishGracefully);
