@@ -26,7 +26,7 @@ var STACK = [],
 	SOURCE = null,
 	PORT = 4000,
 	LOG_LEVEL = LOG.WARN,
-	TEXT_REG = /^(text\/*|application\/(ecmascript|json|javascript|xml|x-javascript|x-markdown))$/i;
+	TEXT_REG = /^(text\/\w*|application\/(ecmascript|json|javascript|xml|x-javascript|x-markdown))(;\s?charset=UTF-8)?$/i;
 
 (function() {
 	if(process.argv.length < 2) throw 'Must provide a proxy mode';
