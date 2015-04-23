@@ -25,8 +25,9 @@ var STACK = [],
 	MODE = false,
 	SOURCE = null,
 	PORT = 4000,
-	LOG_LEVEL = LOG.WARN,
-	TEXT_REG = /^(text\/\w*|application\/(ecmascript|json|javascript|xml|x-javascript|x-markdown))(;\s?charset=UTF-8)?$/i;
+	LOG_LEVEL = LOG.DEBUG,
+	TEXT_REG = /^(text\/\w*|application\/(ecmascript|json|javascript|xml|x-javascript|x-markdown))(;\s?charset=UTF-8)?$/i,
+	HTML_REG = /^text\/html(;.*)?$/;
 
 (function() {
 	if(process.argv.length < 2) throw 'Must provide a proxy mode';
@@ -130,17 +131,21 @@ function resolveAndServeResource(_req, _resp) {
 	}
 }
 
-function serveLastResource(_resp) {
-	serveResource(STACK[STACK.length-1], _resp);
-}
-
 function serveResource(_resource, _resp) {
 	_resp.statusCode = _resource.statusCode;
 
 	forOwn(_resource.headers, function(k, v) { _resp.setHeader(k, v); });
 
 	if(_resource.content) {
-		var buf = new Buffer(_resource.content, _resource.encoding);
+		var contentType = _resource.headers['content-type'],
+			content = _resource.content;
+
+		if(_resource.encoding == 'utf-8' && contentType && HTML_REG.test(contentType)) {
+			log(LOG.DEBUG, 'Injecting capture ui!');
+			content = content.replace(/<\/head>/i, '<script type="text/javascript">console.log(\'sup!\');</script></head>');
+		}
+
+		var buf = new Buffer(content, _resource.encoding);
 		_resp.end(buf);
 	} else {
 		_resp.end();
@@ -214,7 +219,7 @@ function cacheResponse(_req, _resp, _cb) {
 	// when all data is received, store resource (dont know how this will handle more than one request)
 	outStream.on('end', function() {
 		STACK.push(resource);
-		_cb();
+		_cb(resource);
 	});
 }
 
@@ -279,8 +284,8 @@ function captureRequest(_req, _resp, _useSSL) {
 	log(LOG.DEBUG, JSON.stringify(options));
 
 	var forward = (urlObj.protocol == 'https:' ? https : http).request(options, function(_fw_resp) {
-		cacheResponse(_req, _fw_resp, function() {
-			serveLastResource(_resp);
+		cacheResponse(_req, _fw_resp, function(_resource) {
+			serveResource(_resource, _resp);
 		});
 	});
 
