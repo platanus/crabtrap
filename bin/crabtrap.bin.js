@@ -8,6 +8,8 @@ var net = require('net'),
 	zlib = require('zlib'),
 	path = require('path');
 
+var crabtrapI0 = require('../lib/domains/crabtrap_io');
+
 // Globals
 
 var HTTPS_OPTIONS = {
@@ -22,12 +24,6 @@ var LOG = {
 	ERROR: 3
 };
 
-var EXT_TYPES = {
-	"html"  : "text/html",
-	"js"    : "application/javascript",
-	"json"  : "application/json"
-};
-
 var STACK = [],
 	MODE = false,
 	SOURCE = null,
@@ -36,7 +32,7 @@ var STACK = [],
 	TEXT_REG = /^(text\/\w*|application\/(ecmascript|json|javascript|xml|x-javascript|x-markdown))(;\s?charset=UTF-8)?$/i,
 	HTML_REG = /^text\/html(;.*)?$/,
 	MAGIC_HOST = 'www.crabtrap.io',
-	ROOT = path.resolve(__dirname, '..');
+	IO_HANDLER = crabtrapI0.build(MAGIC_HOST);
 
 (function() {
 	if(process.argv.length < 2) throw 'Must provide a proxy mode';
@@ -151,7 +147,12 @@ function serveResource(_resource, _resp) {
 
 		if(_resource.encoding == 'utf-8' && contentType && HTML_REG.test(contentType)) {
 			log(LOG.DEBUG, 'Injecting capture ui!');
-			content = content.replace(/<\/head>/i, '<script src="https://' + MAGIC_HOST + '/inject.js"\></script></head>');
+			content = content.replace(/<\/head>/i, (
+				'<script src="https://' + MAGIC_HOST + '/selectorgadget_combined.js"\></script>'+
+				'<script src="https://' + MAGIC_HOST + '/inject.js"\></script>'+
+				'<link href="https://' + MAGIC_HOST + '/selectorgadget_combined.css" media="all" rel="stylesheet">'+
+				'</head>'
+			));
 		}
 
 		var buf = new Buffer(content, _resource.encoding);
@@ -256,41 +257,8 @@ function buildErrorHandler(_resp) {
 	};
 }
 
-function getFileExt(_path) {
-	var i = _path.lastIndexOf('.');
-	return (i < 0) ? '' : _path.substr(i+1).toLowerCase();
-}
-
-function getFileContentType(_path) {
-	return EXT_TYPES[getFileExt(_path)] || 'application/octet-stream';
-}
-
-function serveLocal(_req, _resp) {
-	var urlObj = url.parse(_req.url);
-	if(urlObj.host == MAGIC_HOST) {
-		var fs_path = ROOT + '/static' + urlObj.path;
-
-		fs.readFile(fs_path, function (err, data) {
-			if (err) {
-				log(LOG.WARN, 'Local asset not found at: ' + fs_path);
-				_resp.statusCode = 404;
-				_resp.end();
-			} else {
-				log(LOG.INFO, 'Serving crabtrap asset: ' + fs_path);
-				_resp.statusCode = 200;
-				_resp.setHeader('content-type', getFileContentType(fs_path));
-				_resp.end(data);
-			}
-		});
-
-		return true;
-	}
-
-	return false;
-}
-
 function passRequest(_req, _resp) {
-	if(serveLocal(_req, _resp)) return;
+	if(IO_HANDLER.handleRequest(_req, _resp)) return;
 
 	log(LOG.INFO, 'Passing through ' + _req.method + ' request for ' + _req.url);
 
@@ -312,7 +280,7 @@ function passRequest(_req, _resp) {
 }
 
 function captureRequest(_req, _resp, _useSSL) {
-	if(serveLocal(_req, _resp)) return;
+	if(IO_HANDLER.handleRequest(_req, _resp)) return;
 
 	log(LOG.INFO, 'Forwarding ' + _req.method + ' request for ' + _req.url);
 
@@ -341,7 +309,7 @@ function captureRequest(_req, _resp, _useSSL) {
 }
 
 function replayRequest(_req, _resp) {
-	if(serveLocal(_req, _resp)) return;
+	if(IO_HANDLER.handleRequest(_req, _resp)) return;
 
 	log(LOG.INFO, 'Resolving ' + _req.method + ' request for ' + _req.url);
 	resolveAndServeResource(_req, _resp);
