@@ -8,7 +8,9 @@ var net = require('net'),
 	zlib = require('zlib'),
 	path = require('path');
 
-var crabtrapI0 = require('../lib/domains/crabtrap_io');
+var crabtrapI0 = require('../lib/domains/crabtrap_io'),
+	Memento = require('../lib/memento').Memento,
+	keysToLowerCase = require('../lib/utils').keysToLowerCase;
 
 // Globals
 
@@ -29,10 +31,9 @@ var STACK = [],
 	SOURCE = null,
 	PORT = 4000,
 	LOG_LEVEL = LOG.WARN,
-	TEXT_REG = /^(text\/\w*|application\/(ecmascript|json|javascript|xml|x-javascript|x-markdown))(;\s?charset=UTF-8)?$/i,
-	HTML_REG = /^text\/html(;.*)?$/,
 	MAGIC_HOST = 'www.crabtrap.io',
-	IO_HANDLER = crabtrapI0.build(MAGIC_HOST);
+	IO_HANDLER = crabtrapI0.build(MAGIC_HOST),
+	MEMENTO = new Memento();
 
 (function() {
 	if(process.argv.length < 2) throw 'Must provide a proxy mode';
@@ -62,191 +63,8 @@ function log(_level, _message) {
 	if(_level >= LOG_LEVEL) console.log(_message);
 }
 
-function forOwn(_obj, _cb) {
-	for(var key in _obj) {
-		if(_obj.hasOwnProperty(key)) {
-			_cb(key, _obj[key]);
-		}
-	}
-}
-
-function keysToLowerCase(_obj) {
-	var result = {};
-	forOwn(_obj, function(k,v) { result[k.toLowerCase()] = v; });
-	return result;
-}
-
 function pickRandomPort() {
 	return 0; // This could fail on Linux...
-}
-
-function matchRequestToResource(_req, _resource) {
-	return _resource.method.toLowerCase() == _req.method.toLowerCase() && _resource.url == _req.url;
-}
-
-function matchRequestToResourceWOQuery(_req, _resource) {
-	if(_resource.method.toLowerCase() == _req.method.toLowerCase()) return false;
-
-	var reqUrl = url.parse(_req.url, true),
-		resUrl = url.parse(_resource.url, true);
-
-	return reqUrl.hostname == resUrl.hostname && reqUrl.pathname == resUrl.pathname;
-}
-
-function findAndMoveLast(_req, _array, _matches) {
-	for(var i = 0, l = _array.length; i < l; i++) {
-		if(_matches(_req, _array[i])) {
-			var resource = _array.splice(i, 1)[0];
-			_array.push(resource);
-			return resource;
-		}
-	}
-
-	return null;
-}
-
-function loadStackFrom(_path, _then) {
-	var data = fs.readFileSync(_path);
-	zlib.gunzip(data, function(err, buffer) {
-		if (!err) STACK = JSON.parse(buffer.toString());
-		_then();
-	});
-}
-
-function saveStackTo(_path, _then) {
-	var data = JSON.stringify(STACK);
-	zlib.gzip(data, function(err, buffer) {
-		if (!err) fs.writeFileSync(_path, buffer);
-		_then();
-	});
-}
-
-function resolveAndServeResource(_req, _resp) {
-	var resource = findInStack(_req);
-	if(resource) {
-		log(LOG.INFO, "Serving: " + resource.method + ' ' + resource.url);
-		log(LOG.DEBUG, "HTTP " + resource.statusCode);
-		log(LOG.DEBUG, JSON.stringify(resource.headers));
-
-		serveResource(resource, _resp);
-	} else {
-		log(LOG.WARN, 'Not found: ' + _req.url);
-		_resp.statusCode = 404;
-		_resp.end();
-	}
-}
-
-function serveResource(_resource, _resp) {
-	_resp.statusCode = _resource.statusCode;
-
-	forOwn(_resource.headers, function(k, v) { _resp.setHeader(k, v); });
-
-	if(_resource.content) {
-		var contentType = _resource.headers['content-type'],
-			content = _resource.content;
-
-		if(_resource.encoding == 'utf-8' && contentType && HTML_REG.test(contentType)) {
-			log(LOG.DEBUG, 'Injecting capture ui!');
-			content = content.replace(/<\/head>/i, (
-				'<script src="https://' + MAGIC_HOST + '/selectorgadget_combined.js"\></script>'+
-				'<script src="https://' + MAGIC_HOST + '/inject.js"\></script>'+
-				'<link href="https://' + MAGIC_HOST + '/selectorgadget_combined.css" media="all" rel="stylesheet">'+
-				'</head>'
-			));
-		}
-
-		var buf = new Buffer(content, _resource.encoding);
-		_resp.end(buf);
-	} else {
-		_resp.end();
-	}
-}
-
-function findAndMoveLast(_req, _matches) {
-	for(var i = 0, l = STACK.length; i < l; i++) {
-		if(_matches(_req, STACK[i])) {
-			var resource = STACK.splice(i, 1)[0];
-			STACK.push(resource);
-			return resource;
-		}
-	}
-
-	return null;
-}
-
-function findInStack(_req, _partial) {
-	return findAndMoveLast(_req, matchRequestToResource) ||
-		findAndMoveLast(_req, matchRequestToResourceWOQuery);
-}
-
-function cacheResponse(_req, _resp, _cb) {
-
-	log(LOG.INFO, "Caching Response");
-	log(LOG.DEBUG, "HTTP " + _resp.statusCode);
-	log(LOG.DEBUG, JSON.stringify(keysToLowerCase(_resp.headers)));
-
-	var encoding = null,
-		// TODO: consider storing port and protocoll in the resource.
-		resource = {
-			url: _req.url,
-			statusCode: _resp.statusCode,
-			method: _req.method,
-			// inHeaders: req.headers, // store request headers to aid in recognition?
-			headers: keysToLowerCase(_resp.headers),
-			content: '',
-			encoding: 'base64'
-		},
-		contentEncoding = resource.headers['content-encoding'],
-		contentType = resource.headers['content-type'],
-		outStream = _resp;
-
-	// add decompression if supported encoding:
-	if(contentEncoding == 'gzip') {
-		outStream = _resp.pipe(zlib.createGunzip());
-		delete resource.headers['content-encoding'];
-		contentEncoding = null;
-	} else if(contentEncoding == 'deflate') {
-		outStream = _resp.pipe(zlib.createInflate());
-		delete resource.headers['content-encoding'];
-		contentEncoding = null;
-	}
-
-	// use utf8 encoding for uncompresed text:
-	if(!contentEncoding && contentType && TEXT_REG.test(contentType)) {
-		resource.encoding = 'utf-8';
-	}
-
-	// remove unwanted headers:
-	delete resource.headers['content-length'];
-	delete resource.headers['transfer-encoding'];
-
-	// start receiving data:
-	if(resource.encoding) outStream.setEncoding(resource.encoding);
-	outStream.on('data', function(_chunk) {
-		resource.content += _chunk;
-	});
-
-	// when all data is received, store resource (dont know how this will handle more than one request)
-	outStream.on('end', function() {
-		STACK.push(resource);
-		_cb(resource);
-	});
-}
-
-function prepareForwardRequest(_req) {
-	var urlObj = url.parse(_req.url);
-
-	var options = {
-		method: _req.method,
-		host: urlObj.host,
-		path: urlObj.path,
-		rejectUnauthorized: false,
-		headers: keysToLowerCase(_req.headers)
-	};
-
-	// Rewrite headers
-	options.headers['accept-encoding'] = 'gzip,deflate';
-	return options;
 }
 
 function buildErrorHandler(_resp) {
@@ -298,8 +116,8 @@ function captureRequest(_req, _resp, _useSSL) {
 	log(LOG.DEBUG, JSON.stringify(options));
 
 	var forward = (urlObj.protocol == 'https:' ? https : http).request(options, function(_fw_resp) {
-		cacheResponse(_req, _fw_resp, function(_resource) {
-			serveResource(_resource, _resp);
+		MEMENTO.cache(_req, _fw_resp, function(_resource) {
+			_resource.serve(_resp);
 		});
 	});
 
@@ -312,7 +130,15 @@ function replayRequest(_req, _resp) {
 	if(IO_HANDLER.handleRequest(_req, _resp)) return;
 
 	log(LOG.INFO, 'Resolving ' + _req.method + ' request for ' + _req.url);
-	resolveAndServeResource(_req, _resp);
+
+	var resource = MEMENTO.find(_req);
+	if(resource) {
+		resource.serve(_resp);
+	} else {
+		log(LOG.WARN, 'Not found: ' + _req.url);
+		_resp.statusCode = 404;
+		_resp.end();
+	}
 }
 
 function selectProxy() {
@@ -359,7 +185,7 @@ SERVER.on('connect', function (_req, _sock, _head) {
 console.log("Starting crabtrap! mode: " + MODE);
 
 if(MODE == 'replay') {
-	loadStackFrom(SOURCE, SERVER.listen.bind(SERVER, PORT));
+	MEMENTO.loadFrom(SOURCE, process.exit.bind(process));
 } else {
 	SERVER.listen(PORT);
 }
@@ -372,7 +198,7 @@ function finishGracefully() {
 	console.log("Shutting down crabtrap!");
 	SERVER.close();
 	if(MODE == 'capture') {
-		saveStackTo(SOURCE, process.exit.bind(process));
+		MEMENTO.saveTo(SOURCE, process.exit.bind(process));
 	} else {
 		process.exit();
 	}
