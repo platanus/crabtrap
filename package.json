@@ -17,5 +17,8 @@
   "bin": {
     "crabtrap": "bin/crabtrap.bin.js"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "q": "^1.3.0"
+  }
 }
