@@ -1,19 +1,15 @@
 #!/usr/bin/env node
 
-var crabtrapI0 = require('../lib/domains/crabtrap_io'),
-	localhost = require('../lib/domains/localhost'),
+var localhost = require('../lib/domains/localhost'),
 	Memento = require('../lib/memento').Memento,
 	Proxy = require('../lib/proxy').Proxy,
 	log = require('../lib/logger');
 
 // Globals
 
-var MODE = false,
-	SOURCE = null,
+var SOURCE = null,
 	PORT = 4000,
-	MAGIC_HOST = 'www.crabtrap.io',
-	MEMENTO = new Memento(),
-	HTML_REG = /^text\/html(;.*)?$/;
+	MEMENTO = new Memento();
 
 (function() {
 	if(process.argv.length < 2) throw 'Must provide a proxy mode';
@@ -36,49 +32,26 @@ var MODE = false,
 	}
 })();
 
-function decorateHandler(_handler) {
-	return function(_req) {
-		var promise = _handler(_req);
-		if(promise) {
-			promise = promise.then(function(_output) {
-				if(_output.content) {
-					var contentType = _output.headers['content-type'];
-
-					if(_output.encoding == 'utf-8' && contentType && HTML_REG.test(contentType)) {
-						log.debug('Injecting capture ui!');
-						_output.content = _output.content.replace(/<\/head>/i, (
-							'<script src="https://' + MAGIC_HOST + '/selectorgadget_combined.js"\\></script>'+
-							'<script src="https://' + MAGIC_HOST + '/inject.js"\\></script>'+
-							'<link href="https://' + MAGIC_HOST + '/selectorgadget_combined.css" media="all" rel="stylesheet">'+
-							'</head>'
-						));
-					}
-				}
-
-				return _output;
-			});
-		}
-
-		return promise;
-	};
-}
-
 function buildProxy() {
 	var proxy = new Proxy(PORT);
-	proxy.addHandler(crabtrapI0.buildHandler(MAGIC_HOST));
-	proxy.addHandler(localhost.buildHandler());
+	proxy.setHandler('localhost', localhost.buildHandler());
 
 	switch(MODE) {
 		case 'pass':
-			proxy.addHandler(decorateHandler(require('../lib/modes/pass').buildHandler()));
+			proxy.setHandler('proxy', require('../lib/modes/pass').buildHandler());
 			break;
 		case 'capture':
-			proxy.addHandler(decorateHandler(require('../lib/modes/capture').buildHandler(MEMENTO)));
+			proxy.setHandler('proxy', require('../lib/modes/capture').buildHandler(MEMENTO));
 			break;
 		case 'replay':
-			proxy.addHandler(decorateHandler(require('../lib/modes/replay').buildHandler(MEMENTO)));
+			proxy.setHandler('proxy', require('../lib/modes/replay').buildHandler(MEMENTO));
 			break;
 		default: throw 'Invalid proxy mode';
+	}
+
+	if(false) {
+		var scraper = require('../lib/scraper/plugin');
+		scraper.setupProxy(proxy);
 	}
 
 	return proxy;
