@@ -9,7 +9,8 @@ var localhost = require('../lib/domains/localhost'),
 
 var SOURCE = null,
 	PORT = 4000,
-	MEMENTO = new Memento();
+	MEMENTO = new Memento(),
+	VIRTUAL = null;
 
 (function() {
 	if(process.argv.length < 2) throw 'Must provide a proxy mode';
@@ -27,6 +28,7 @@ var SOURCE = null,
 		switch(parts[0]) {
 			case '--port': PORT = parseInt(parts[1], 10); break;
 			case '--quiet': PORT = parseInt(parts[1], 10); break;
+			case '--virtual': VIRTUAL = parts[1]; break;
 			default: throw 'Invalid option ' + parts[0];
 		}
 	}
@@ -49,9 +51,9 @@ function buildProxy() {
 		default: throw 'Invalid proxy mode';
 	}
 
-	if(false) {
-		var scraper = require('../lib/scraper/plugin');
-		scraper.setupProxy(proxy);
+	if(VIRTUAL) {
+		var scraper = require('../lib/virtual/plugin');
+		scraper.setupProxy(proxy, VIRTUAL);
 	}
 
 	return proxy;
@@ -73,12 +75,13 @@ function finishGracefully() {
 	EXITING = true;
 
 	console.log("Shutting down crabtrap!");
-	PROXY.close();
-	if(MODE == 'capture') {
-		MEMENTO.saveTo(SOURCE, process.exit.bind(process));
-	} else {
-		process.exit();
-	}
+	PROXY.close(function() {
+		if(MODE == 'capture') {
+			MEMENTO.saveTo(SOURCE, process.exit.bind(process));
+		} else {
+			process.exit();
+		}
+	});
 }
 
 process.on('SIGTERM', finishGracefully);
