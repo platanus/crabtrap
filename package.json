@@ -19,6 +19,7 @@
   },
   "license": "MIT",
   "dependencies": {
-    "q": "^1.3.0"
+    "q": "^1.3.0",
+    "adiff": "*"
   }
 }
