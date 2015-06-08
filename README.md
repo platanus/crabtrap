@@ -1,6 +1,6 @@
 # Crabtrap Proxy
 
-Crabtrap is a capturing/replaying proxy originally developed to help with testing web crawlers in the [Crabfarm](www.crabfarm.io) proyect.
+Crabtrap is a capturing/replaying proxy originally developed to help with testing web crawlers in the [Crabfarm](http://www.crabfarm.io) proyect.
 
 Features:
 
