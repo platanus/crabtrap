@@ -1,6 +1,6 @@
 {
   "name": "crabtrap",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Recording and replaying HTTP proxy",
   "author": "Ignacio <iobaixas@gmail.com>",
   "scripts": {
