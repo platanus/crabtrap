@@ -1,8 +1,10 @@
 # Crabtrap Proxy
 
-Crabtrap is an http proxy that can capture and replay requests.
+Crabtrap is an http proxy that can **capture** and **replay** requests.
 
 It was originally developed to help with testing web crawlers in the [Crabfarm](http://www.crabfarm.io) project.
+
+![crabtrap](https://cloud.githubusercontent.com/assets/313750/9500775/998abf3c-4bfd-11e5-8c21-0e98f60f6637.png)
 
 Features:
 
@@ -54,4 +56,4 @@ Crabtrap is part of the [Crabfarm Framework](http://crabfarm.io/code).
 
 ## License
 
-Crabtrap is © 2015 [Platanus, spa](http://platan.us). It is free software and may be redistributed under the MIT License.
+Crabtrap is © 2015 [Platanus, SpA](http://platan.us). It is free software and may be redistributed under the MIT License.
