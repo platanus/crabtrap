@@ -7,7 +7,11 @@ var localhost = require('../lib/domains/localhost'),
 
 // Globals
 
-var DEFAULT_PORT = 4000;
+var DEFAULT_PORT = 4000,
+	BLACKLISTED_URLS = [
+		'http://stats.g.doubleclick.net/__utm.gif',
+		'https://stats.g.doubleclick.net/__utm.gif'
+	];
 
 function renderHelp() {
 	var pjson = require('../package.json');
@@ -66,7 +70,7 @@ function renderHelp() {
 			proxy.setHandler('proxy', require('../lib/modes/pass').buildHandler());
 			break;
 		case 'capture':
-			proxy.setHandler('proxy', require('../lib/modes/capture').buildHandler(memento));
+			proxy.setHandler('proxy', require('../lib/modes/capture').buildHandler(memento, BLACKLISTED_URLS));
 			break;
 		case 'replay':
 			proxy.setHandler('proxy', require('../lib/modes/replay').buildHandler(memento));
